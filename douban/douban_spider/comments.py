@@ -2,7 +2,7 @@
 import requests
 from bs4 import BeautifulSoup as bs
 from random import choice
-from logzero import logger
+from utils.log import logger
 import time
 import re
 import traceback
@@ -11,6 +11,7 @@ from urllib import parse
 import pymongo
 from pymongo import MongoClient as mc
 from utils.mail import send_mail
+from douban.douban_spider import identify
 client = mc('127.0.0.1', 27017)
 db = client['review']['douban']
 db.ensure_index([('href', pymongo.ASCENDING)], unique=True, dropDups=True)
@@ -42,7 +43,7 @@ class Douban(object):
         self.old_query = query
         self.query = parse.quote(query)
         self.s = requests.session()
-        acount = ['2862590148@qq.com', 'zx19950101']
+        acount = ['1195615991@qq.com', 'zx19950101']
         self.formdata = {'redir': 'https://www.douban.com',
                          'form_email': acount[0],
                          'form_password': acount[1],
@@ -79,21 +80,28 @@ class Douban(object):
                 img = requests.get(captchaSrc)
                 with open('1.jpg', 'wb') as f:
                     f.write(img.content)
-                captcha = input('please input the captcha:')
-                self.formdata['captcha-solution'] = captcha
+                # captcha = input('please input the captcha:')
+                id = identify.recognition('1.jpg')
+                print(id)
+                self.formdata['captcha-solution'] = id
                 self.formdata['captcha-id'] = captchaId
             self.formdata["user_login"] = "登录"
             r = self.s.post(self.loginUrl, data=self.formdata, headers = self.headers())
             if r.url == "https://www.douban.com":
                 logger.info('Login successfully!!!')
+                return True
             else:
                 logger.info('Login failed!')
+                return False
         else:
             r = self.s.post(self.loginUrl, data=self.formdata, headers=self.headers())
+            print(r.url)
             if r.url == "https://www.douban.com":
                 logger.info('Login successfully!!!')
+                return True
             else:
                 logger.info('Login failed!')
+                return False
 
 
     def get_all_pageurl(self):
@@ -125,7 +133,7 @@ class Douban(object):
     def worker(self, url):
         res = self.s.get(url, headers=self.headers())
         if res.status_code == 200:
-            time.sleep(0.7)
+            time.sleep(0.5)
             soup = bs(res.text, 'lxml')
             title = soup.find('span', {'property': 'v:summary'}).get_text()
             text = soup.select('#link-report > div.review-content.clearfix')[0].get_text()
@@ -144,7 +152,10 @@ class Douban(object):
                 pass
 
     def main(self):
-        self.loginDB()
+        while 1:
+            time.sleep(5)
+            if self.loginDB():
+                break
         logger.info('%s%s%s' %('start grab...\t', self.old_query, '影评信息'))
         self.parse_comment()
 
