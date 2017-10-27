@@ -43,7 +43,7 @@ class Douban(object):
         self.old_query = query
         self.query = parse.quote(query)
         self.s = requests.session()
-        acount = ['15000406743', 'zx19950101']
+        acount = ['1195615991@qq.com', 'zx19950101']
         self.formdata = {'redir': 'https://www.douban.com',
                          'form_email': acount[0],
                          'form_password': acount[1],
@@ -156,10 +156,11 @@ class Douban(object):
                 pass
 
     def main(self):
+        #
         # while 1:
-            # if self.loginDB():
-            #     break
-            # time.sleep(5)
+        #     time.sleep(5)
+        #     if self.loginDB():
+        #         break
         logger.info('%s%s%s' %('start grab...\t', self.old_query, '影评信息'))
         self.parse_comment()
 
