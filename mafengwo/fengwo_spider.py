@@ -96,15 +96,15 @@ class MafengWo(object):
     def get_travel_notes(self):
         logger.info('抓取游记: %s%s',  self.old_dest, '\n')
         url = job_redis.spop(self.redis_urlname)
+        count = 0
         while url:
-            count = 0
             try:
                self.note_worker(url)
-            except:
+            except :
                 logger.error('crawl maotu bug %s' % traceback.format_exc())
                 send_mail('maotu error', traceback.format_exc(), '1195615991@qq.com')
                 job_redis.sadd(self.redis_urlname, url)
-                url = job_redis.spop(self.redis_urlname)
+            url = job_redis.spop(self.redis_urlname)
             count += 1
             if count % 20 == 0:
                 logger.info('has been download %s travel_notes' % count )
@@ -119,7 +119,6 @@ class MafengWo(object):
         try:
             tree = etree.HTML(web_data.text)
         except Exception as e:
-            print(e)
             pass
         if tree is not None:
             title_pattern = re.compile(u'<title>(.+)\s-\s蚂蜂窝</title>', re.DOTALL)
@@ -187,9 +186,9 @@ class MafengWo(object):
 
     def main(self):
         logger.info('开始爬取 %s 各景点精彩点评' % self.old_dest)
-        if not job_redis.exists(self.redis_idname):
-            self.get_scenic_id()
-        self.get_comments()
+        # if not job_redis.exists(self.redis_idname):
+        #     self.get_scenic_id()
+        # self.get_comments()
         logger.info('开始爬取 %s 精彩游记：' % self.old_dest)
         if not job_redis.exists(self.redis_urlname):
             self.get_travel_url()
