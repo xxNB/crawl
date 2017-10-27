@@ -97,13 +97,17 @@ class MafengWo(object):
         logger.info('抓取游记: %s%s',  self.old_dest, '\n')
         url = job_redis.spop(self.redis_urlname)
         while url:
-           try:
+            count = 0
+            try:
                self.note_worker(url)
-           except:
-               logger.error('crawl maotu bug %s' % traceback.format_exc())
-               send_mail('maotu error', traceback.format_exc(), '1195615991@qq.com')
-               job_redis.sadd(self.redis_urlname, url)
-           url = job_redis.spop(self.redis_urlname)
+            except:
+                logger.error('crawl maotu bug %s' % traceback.format_exc())
+                send_mail('maotu error', traceback.format_exc(), '1195615991@qq.com')
+                job_redis.sadd(self.redis_urlname, url)
+                url = job_redis.spop(self.redis_urlname)
+            count += 1
+            if count % 20 == 0:
+                logger.info('has been download %s travel_notes' % count )
         job_redis.delete(self.redis_urlname)
 
     def note_worker(self, url):
@@ -133,7 +137,7 @@ class MafengWo(object):
                     data = tree.xpath('//div[@class="p_con"]')
                     info = data[0].xpath('string(.)').strip()
                     info = re.sub('\s+', ' ', info)
-            print(info)
+            # print(info)
             db.insert({'type': '游记','area': self.old_dest,'title': title, 'content': info})
 
     def get_comments(self):
@@ -166,7 +170,7 @@ class MafengWo(object):
             if totalCount != 0:
                 max_page = 50 if totalCount > 750 else int(totalCount / 15) + 1
                 logger.info('地点 : %s%s%s' % (area, '\n', '=' * 100))
-                for page in range(max_page + 1):
+                for ix, page in enumerate(range(max_page + 1)):
                     time.sleep(1)
                     comment_url = 'http://pagelet.mafengwo.cn/poi/pagelet/poiCommentListApi?params={"poi_id": %s,"page": %s,"just_comment":1}' % (
                     str(id), page + 1)
@@ -177,8 +181,9 @@ class MafengWo(object):
                     comments = web_soup.select('p.rev-txt')
                     for author, comment in zip(authors, comments):
                         data = {'city': self.old_dest, 'type': '点评', 'area': area,'author': author.get_text().strip(), 'comment': comment.get_text().strip()}
-                        print(data)
+                        # print(data)
                         db.insert(data)
+                    logger.info('has been download %s page' % ix)
 
     def main(self):
         logger.info('开始爬取 %s 各景点精彩点评' % self.old_dest)
@@ -194,7 +199,7 @@ class MafengWo(object):
 
 if __name__ == '__main__':
     # dest_list = ['大理', '安庆', '六安']
-    for dest in citys_name:
-        res = MafengWo(dest)
-        send_mail('mafengwo', '完成%s' % dest, '1195615991@qq.com')
+    # for dest in citys_name:
+    res = MafengWo('北京')
+    # send_mail('mafengwo', '完成%s' % dest, '1195615991@qq.com')
 

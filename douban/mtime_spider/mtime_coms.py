@@ -8,6 +8,8 @@ from urllib import parse
 from utils.log import logger
 from utils.mail import send_mail
 from pymongo import MongoClient as mc
+import asyncio
+import aiohttp
 client = mc('127.0.0.1', 27017)
 db = client['review']['mtime']
 
@@ -20,9 +22,7 @@ agent = ["Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Ge
 
 class MtimeComs(object):
     def __init__(self, query):
-        self.query = query
-        self.parse_query = parse.quote(query)
-        self.start_url = 'http://www.mtime.com/{}/'.format(parse.quote(query))
+        self.start_url = 'http://www.mtime.com/{}/'.format(query)
 
         agent = [
             "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/27.0.1453.94 Safari/537.36",
@@ -46,15 +46,16 @@ class MtimeComs(object):
         id =  pattern.search(web_text).group(1)
         self.movie_url = 'http://movie.mtime.com/{}/'.format(id)
 
+        web_text = requests.get(self.start_url)
 
     def get_all_links(self):
         href_list = []
         page = 1
         while 1:
             if page == 1:
-                url = self.movie_url+'comment.html'
+                url = self.start_url+'comment.html'
             else:
-                url = self.movie_url + 'comment-{}.html'.format(page)
+                url = self.start_url + 'comment-{}.html'.format(page)
             web_text = requests.get(url, headers=self.headers)
             if web_text.status_code == 200:
                 tree = etree.HTML(web_text.text)
@@ -72,24 +73,22 @@ class MtimeComs(object):
         for url in self.get_all_links():
             web = requests.get(url, headers=self.headers, timeout=10)
             tree = etree.HTML(web.text)
-            if tree.xpath('//h2[@class="px38 mt30 c_000"]/text()'):
-                title = tree.xpath('//h2[@class="px38 mt30 c_000"]/text()')[0]
-                people = tree.xpath('//p[@class="pt3"]/a[@target="_blank"]/text()')[0]
-                text = tree.xpath('//div[@class="db_mediacont db_commentcont"]')
-                info = text[0].xpath('string(.)').strip()
-                info = re.sub('\s+', ' ', info)
-                item = {'peopel': people, 'title': title, 'text': info, 'movie': self.query}
-                db.insert(item)
-                print(item)
+            title = tree.xpath('//h2[@class="px38 mt30 c_000"]/text()')[0]
+            people = tree.xpath('//p[@class="pt3"]/a[@target="_blank"]/text()')[0]
+            text = tree.xpath('//div[@class="db_mediacont db_commentcont"]')
+            info = text[0].xpath('string(.)').strip()
+            info = re.sub('\s+', ' ', info)
+            item = {'peopel': people, 'title': title, 'text': info}
+
+            print(item)
 
     def main(self):
         try:
-            self.get_id()
             self.parse_link()
         except:
             logger.error('mtime crawl bug!!! %s' % traceback.format_exc())
             send_mail('mtime crawl bug', traceback.format_exc(), '1195615991@qq.com')
 
 if __name__ == '__main__':
-    res = MtimeComs('教父')
-    res.parse_link()
+    res = MtimeComs(10968)
+    # res.parse_link()

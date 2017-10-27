@@ -84,7 +84,7 @@ class MaoTu(object):
         else:
             max_page = 0
         logger.info('%s地点: %s%s', '\n', area, '\n')
-        for i in range(int(max_page) + 1):
+        for ix, i in enumerate(range(int(max_page) + 1)):
             new_url = url.decode('utf-8')
             new_url = '-'.join(new_url.split('-')[:-3]) + '-or{}-'.format(i * 10) + '-'.join(new_url.split('-')[-2:])
             web_text = requests.get(new_url, headers=self.headers).text
@@ -100,8 +100,9 @@ class MaoTu(object):
                     'comment': comment.get_text().strip(),
                     'area': area
                 }
-                print(data)
+                # print(data)
                 db.insert(data)
+            logger.info('has been download %s page' % ix)
 
     def main(self):
         self.get_headurl()

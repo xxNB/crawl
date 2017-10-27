@@ -43,7 +43,7 @@ class Douban(object):
         self.old_query = query
         self.query = parse.quote(query)
         self.s = requests.session()
-        acount = ['1195615991@qq.com', 'zx19950101']
+        acount = ['15000406743', 'zx19950101']
         self.formdata = {'redir': 'https://www.douban.com',
                          'form_email': acount[0],
                          'form_password': acount[1],
@@ -122,18 +122,22 @@ class Douban(object):
                 yield item_url
 
     def parse_comment(self):
-        while 1:
-            try:
-                for url in self.get_all_links():
+        try:
+            for ix, url in enumerate(self.get_all_links()):
+                try:
                     self.worker(url)
-            except:
-                logger.error('crawl Douban bug %s' % traceback.format_exc())
-                send_mail('Douban crawl error', traceback.format_exc(), '1195615991@qq.com')
+                except requests.exceptions.ConnectionError:
+                    continue
+                if ix % 20 == 0:
+                    logger.info('has ben download %s' % ix)
+        except :
+            logger.error('crawl Douban bug %s' % traceback.format_exc())
+            send_mail('Douban crawl error', traceback.format_exc(), '1195615991@qq.com')
 
     def worker(self, url):
         res = self.s.get(url, headers=self.headers())
         if res.status_code == 200:
-            time.sleep(0.5)
+            time.sleep(0.8)
             soup = bs(res.text, 'lxml')
             title = soup.find('span', {'property': 'v:summary'}).get_text()
             text = soup.select('#link-report > div.review-content.clearfix')[0].get_text()
@@ -143,7 +147,7 @@ class Douban(object):
             bad = soup.find_all('button')[1].get_text()
             bad = re.sub('\D', '', bad)
             item = {'good': good, 'bad': bad, 'people': people, 'title': title, 'text': text.strip(), 'href': url, 'movie': self.old_query}
-            print(item)
+            # print(item)
             dbItem = db.find_one({'href': item['href']})
             if dbItem:
                 pass
@@ -152,15 +156,15 @@ class Douban(object):
                 pass
 
     def main(self):
-        while 1:
-            time.sleep(5)
-            if self.loginDB():
-                break
+        # while 1:
+            # if self.loginDB():
+            #     break
+            # time.sleep(5)
         logger.info('%s%s%s' %('start grab...\t', self.old_query, '影评信息'))
         self.parse_comment()
 
 if __name__ == '__main__':
 
-    res = Douban('你的名字')
+    res = Douban('战狼2')
     # res.loginDB()
 
