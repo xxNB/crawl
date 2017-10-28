@@ -186,9 +186,9 @@ class MafengWo(object):
 
     def main(self):
         logger.info('开始爬取 %s 各景点精彩点评' % self.old_dest)
-        # if not job_redis.exists(self.redis_idname):
-        #     self.get_scenic_id()
-        # self.get_comments()
+        if not job_redis.exists(self.redis_idname):
+            self.get_scenic_id()
+        self.get_comments()
         logger.info('开始爬取 %s 精彩游记：' % self.old_dest)
         if not job_redis.exists(self.redis_urlname):
             self.get_travel_url()

@@ -116,6 +116,6 @@ class MaoTu(object):
 
 
 if __name__ == '__main__':
-    for dest in citys_name:
-        res = MaoTu(dest)
-        send_mail('maotuying', '完成%s' % dest, '1195615991@qq.com')
+    # for dest in citys_name:
+    res = MaoTu('北京')
+        # send_mail('maotuying', '完成%s' % dest, '1195615991@qq.com')
