@@ -5,6 +5,9 @@ import re
 from utils.log import logger
 from utils.mail import send_mail
 from utils.config import citys_name
+import time
+import asyncio
+import aiohttp
 import redis
 import traceback
 from pymongo import MongoClient as mc
@@ -43,81 +46,88 @@ class MaoTu(object):
         self.dest_name = head_url.split('-')[2]
         self.scenicurl = 'https://www.tripadvisor.cn/' + 'Attractions-{0}-Activities-{1}.html'.format(self.dest_id, self.dest_name)
 
+    @asyncio.coroutine
     def get_area_links(self):
-        web_text = requests.get(self.scenicurl, headers=self.headers).text
-        web_soup = bs(web_text, 'lxml')
-        if web_soup.select('a.pageNum.taLnk'):
-            max_page = web_soup.select('a.pageNum.taLnk')[-1].get_text()
-        else:
-            max_page = 0
-        pattern = re.compile(r'(/Attraction_Review\S+.html#REVIEWS)')
-        print(max_page)
-        for page in range(int(max_page)+1):
-            if page == 0:
-                araelink = pattern.findall(web_text)
-                new_araelink = map(lambda x: 'https://www.tripadvisor.cn/'+x, araelink)
+        with aiohttp.ClientSession() as session:
+            web = yield from session.get(self.scenicurl, headers=self.headers)
+            web_text = yield from web.read()
+            web_soup = bs(web_text, 'lxml')
+            if web_soup.select('a.pageNum.taLnk'):
+                max_page = web_soup.select('a.pageNum.taLnk')[-1].get_text()
             else:
-                url = 'https://www.tripadvisor.cn/Attractions-{0}-Activities-oa{1}-{2}.html#ATTRACTION_LIST'.format(self.dest_id, page*30, self.dest_name)
-                next_web_text = requests.get(url, headers=self.headers).text
-                araelink = pattern.findall(next_web_text)
-                new_araelink = map(lambda x: 'https://www.tripadvisor.cn/'+x, araelink)
-            for url in new_araelink:
-                print(url)
-                job_redis.sadd(self.redis_idname, url)
+                max_page = 0
+            pattern = re.compile(r'(/Attraction_Review\S+.html#REVIEWS)')
+            for page in range(int(max_page)+1):
+                if page == 0:
+                    araelink = pattern.findall(str(web_text))
+                    new_araelink = map(lambda x: 'https://www.tripadvisor.cn/'+x, araelink)
+                else:
+                    url = 'https://www.tripadvisor.cn/Attractions-{0}-Activities-oa{1}-{2}.html#ATTRACTION_LIST'.format(self.dest_id, page*30, self.dest_name)
+                    with aiohttp.ClientSession() as session:
+                        next_web = yield from session.get(url, headers=self.headers)
+                        next_web_text = yield from next_web.read()
+                        araelink = pattern.findall(str(next_web_text))
+                        new_araelink = map(lambda x: 'https://www.tripadvisor.cn/'+x, araelink)
+                to_do = [self.worker(url) for url in new_araelink]
+                to_do_iter = asyncio.as_completed(to_do)
+                for future in to_do_iter:
+                    try:
+                        res = yield from future
+                    except Exception as e:
+                        continue
 
-    def get_comment(self):
-        url = job_redis.spop(self.redis_idname)
+    @asyncio.coroutine
+    def get_comment(self, url):
         while url:
             try:
                 self.worker(url)
             except:
                 logger.error('crawl maotu bug %s' % traceback.format_exc())
                 send_mail('maotu error', traceback.format_exc(), '1195615991@qq.com')
-                job_redis.sadd(self.redis_idname)
-            url = job_redis.spop(self.redis_idname)
-        job_redis.delete(self.redis_idname)
 
     def worker(self, url):
-        web_text = requests.get(url, headers=self.headers).text
-        web_soup = bs(web_text, 'lxml')
-        area = web_soup.find('h1', {'id': 'HEADING'}).get_text()
-        if web_soup.select('span.pageNum.last.taLnk'):
-            max_page = web_soup.select('span.pageNum.last.taLnk')[-1].get_text()
-        else:
-            max_page = 0
-        logger.info('%s地点: %s%s', '\n', area, '\n')
-        for ix, i in enumerate(range(int(max_page) + 1)):
-            new_url = url.decode('utf-8')
-            new_url = '-'.join(new_url.split('-')[:-3]) + '-or{}-'.format(i * 10) + '-'.join(new_url.split('-')[-2:])
-            web_text = requests.get(new_url, headers=self.headers).text
+        with aiohttp.ClientSession() as session:
+            web = yield from session.get(url, headers=self.headers)
+            web_text = yield from web.read()
             web_soup = bs(web_text, 'lxml')
-            authors = web_soup.select('div.username.mo > span')
-            titles = web_soup.find_all('span', {'class': 'noQuotes'})
-            comments = web_soup.select('div.prw_rup.prw_reviews_text_summary_hsx > div > p')
-            for author, title, comment in zip(authors, titles, comments):
-                data = {
-                    'city': self.dest,
-                    'author': author.get_text().strip(),
-                    'title': title.get_text().strip(),
-                    'comment': comment.get_text().strip(),
-                    'area': area
-                }
-                # print(data)
-                db.insert(data)
-            logger.info('has been download %s page' % ix)
+            area = web_soup.find('h1', {'id': 'HEADING'}).get_text()
+            if web_soup.select('span.pageNum.last.taLnk'):
+                max_page = web_soup.select('span.pageNum.last.taLnk')[-1].get_text()
+            else:
+                max_page = 0
+            for ix, i in enumerate(range(int(max_page) + 1)):
+                new_url = '-'.join(url.split('-')[:-3]) + '-or{}-'.format(i * 10) + '-'.join(url.split('-')[-2:])
+                with aiohttp.ClientSession() as session:
+                    new_web = yield from session.get(new_url, headers=self.headers)
+                    new_web_text = yield from new_web.read()
+                    web_soup = bs(new_web_text, 'lxml')
+                    authors = web_soup.select('div.username.mo > span')
+                    titles = web_soup.find_all('span', {'class': 'noQuotes'})
+                    comments = web_soup.select('div.prw_rup.prw_reviews_text_summary_hsx > div > p')
+                    for author, title, comment in zip(authors, titles, comments):
+                        data = {
+                            'city': self.dest,
+                            'area': area,
+                            'author': author.get_text().strip(),
+                            'title': title.get_text().strip(),
+                            'comment': comment.get_text().strip(),
+                        }
+                        print(data)
+                        db.insert(data)
 
     def main(self):
         self.get_headurl()
-        logger.info('获取 %s url编码完毕' % self.dest)
-        if not job_redis.exists(self.redis_idname):
-            self.get_area_links()
-        logger.info("开始爬取 %s 精彩点评 " % self.dest)
-        self.get_comment()
-        logger.info('该%s所有景点点评采集完毕' % self.dest)
-
+        print('start...')
+        loop = asyncio.get_event_loop()
+        coro = self.get_area_links()
+        counts = loop.run_until_complete(coro)
+        loop.close()
 
 
 if __name__ == '__main__':
     # for dest in citys_name:
-    res = MaoTu('上海')
-        # send_mail('maotuying', '完成%s' % dest, '1195615991@qq.com')
+    st = time.time()
+    res = MaoTu('大理')
+    print(time.time() - st)
+    print(db.find({}).count())
+    # send_mail('maotuying', '完成%s' % dest, '1195615991@qq.com')
