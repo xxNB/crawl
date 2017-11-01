@@ -77,14 +77,6 @@ class MaoTu(object):
                         continue
 
     @asyncio.coroutine
-    def get_comment(self, url):
-        while url:
-            try:
-                self.worker(url)
-            except:
-                logger.error('crawl maotu bug %s' % traceback.format_exc())
-                send_mail('maotu error', traceback.format_exc(), '1195615991@qq.com')
-
     def worker(self, url):
         with aiohttp.ClientSession() as session:
             web = yield from session.get(url, headers=self.headers)
@@ -117,11 +109,11 @@ class MaoTu(object):
 
     def main(self):
         self.get_headurl()
-        print('start...')
         loop = asyncio.get_event_loop()
         coro = self.get_area_links()
         counts = loop.run_until_complete(coro)
         loop.close()
+        return counts
 
 
 if __name__ == '__main__':
