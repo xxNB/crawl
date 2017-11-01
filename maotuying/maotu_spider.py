@@ -51,6 +51,7 @@ class MaoTu(object):
         else:
             max_page = 0
         pattern = re.compile(r'(/Attraction_Review\S+.html#REVIEWS)')
+        print(max_page)
         for page in range(int(max_page)+1):
             if page == 0:
                 araelink = pattern.findall(web_text)
@@ -61,6 +62,7 @@ class MaoTu(object):
                 araelink = pattern.findall(next_web_text)
                 new_araelink = map(lambda x: 'https://www.tripadvisor.cn/'+x, araelink)
             for url in new_araelink:
+                print(url)
                 job_redis.sadd(self.redis_idname, url)
 
     def get_comment(self):
@@ -117,5 +119,5 @@ class MaoTu(object):
 
 if __name__ == '__main__':
     # for dest in citys_name:
-    res = MaoTu('北京')
+    res = MaoTu('上海')
         # send_mail('maotuying', '完成%s' % dest, '1195615991@qq.com')

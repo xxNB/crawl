@@ -41,8 +41,8 @@ class MoveId(object):
                     page += 20
                     if ix % 100 == 0:
                         logger.info('has been inserted %s' % ix)
-                else:
-                    break
+                    return
+                break
 
 if __name__ == '__main__':
     res = MoveId()

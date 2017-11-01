@@ -6,7 +6,7 @@ Created on 2017/10/28 下午2:43
 import time
 from pymongo import MongoClient as mc
 client = mc('127.0.0.1', 27017)
-db = client['review']['all_movie_id']
+db = client['travel']['maotu']
 
 
 count = db.find({}).count()

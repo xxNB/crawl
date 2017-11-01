@@ -1,14 +1,17 @@
+# -*- coding: utf-8 -*-
+"""
+Created on 01/11/2017 3:50 PM
+@author: SimbaZhang
+"""
 import requests
 from random import choice
 from lxml import etree
-import time
+from bs4 import BeautifulSoup as bs
 import re
 import traceback
 from urllib import parse
 from utils.log import logger
 from utils.mail import send_mail
-import aiohttp
-import asyncio
 from pymongo import MongoClient as mc
 client = mc('127.0.0.1', 27017)
 db = client['review']['mtime']
@@ -18,7 +21,7 @@ agent = ["Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Ge
          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.90 Safari/537.36",
          'Mozilla/4.0 (compatible; MSIE 5.5; Windows NT)']
 
-concur_req = 5
+
 
 class MtimeComs(object):
     def __init__(self, query):
@@ -48,39 +51,31 @@ class MtimeComs(object):
         id =  pattern.search(web_text).group(1)
         self.movie_url = 'http://movie.mtime.com/{}/'.format(id)
 
-    @asyncio.coroutine
     def get_all_links(self):
+        href_list = []
         page = 1
         while 1:
             if page == 1:
                 url = self.movie_url+'comment.html'
             else:
                 url = self.movie_url + 'comment-{}.html'.format(page)
-            with aiohttp.ClientSession() as session:
-                web_text = yield from session.get(url, headers=self.headers)
-                if web_text.status == 200:
-                    web_text = yield from web_text.read()
-                    tree = etree.HTML(web_text)
-                    hrefs = tree.xpath('//h3/a[@target="_blank"]/@href')
-                    page += 1
-                    if hrefs:
-                        to_do = [self.parse_link(url) for url in hrefs]
-                        to_od_iter = asyncio.as_completed(to_do)
-                        for future in to_od_iter:
-                            try:
-                                res = yield from future
-                            except Exception as e:
-                                # print(e)
-                                continue
-                    else:
-                        break
+            web_text = requests.get(url, headers=self.headers)
+            if web_text.status_code == 200:
+                tree = etree.HTML(web_text.text)
+                hrefs = tree.xpath('//h3/a[@target="_blank"]/@href')
+                page += 1
+                if hrefs:
+                    for href in hrefs:
+                        yield href
+                else:
+                    break
+        return href_list
 
-    @asyncio.coroutine
-    def parse_link(self, url):
-        with aiohttp.ClientSession() as session:
-            web = yield from session.get(url, headers=self.headers)
-            web_text = yield from web.read()
-            tree = etree.HTML(web_text)
+
+    def parse_link(self):
+        for url in self.get_all_links():
+            web = requests.get(url, headers=self.headers, timeout=10)
+            tree = etree.HTML(web.text)
             if tree.xpath('//h2[@class="px38 mt30 c_000"]/text()'):
                 title = tree.xpath('//h2[@class="px38 mt30 c_000"]/text()')[0]
                 people = tree.xpath('//p[@class="pt3"]/a[@target="_blank"]/text()')[0]
@@ -88,21 +83,19 @@ class MtimeComs(object):
                 info = text[0].xpath('string(.)').strip()
                 info = re.sub('\s+', ' ', info)
                 item = {'peopel': people, 'title': title, 'text': info, 'movie': self.query}
+                db.insert(item)
                 print(item)
 
     def main(self):
         try:
             self.get_id()
-            loop = asyncio.get_event_loop()
-            coro = self.get_all_links()
-            counts = loop.run_until_complete(coro)
-            loop.close()
-            return counts
+            self.parse_link()
         except:
             logger.error('mtime crawl bug!!! %s' % traceback.format_exc())
-            # send_mail('mtime crawl bug', traceback.format_exc(), '1195615991@qq.com')
+            send_mail('mtime crawl bug', traceback.format_exc(), '1195615991@qq.com')
 
 if __name__ == '__main__':
+    import time
     st = time.time()
     res = MtimeComs('教父')
     print(time.time() - st)
