@@ -5,20 +5,16 @@ import time
 import re
 import traceback
 from urllib import parse
-from utils.log import logger
+from logzero import logger
 from utils.mail import send_mail
 import aiohttp
 import asyncio
-from pymongo import MongoClient as mc
-client = mc('127.0.0.1', 27017)
-db = client['review']['mtime']
 
 session = requests.session()
 agent = ["Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/27.0.1453.94 Safari/537.36",
          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.90 Safari/537.36",
          'Mozilla/4.0 (compatible; MSIE 5.5; Windows NT)']
 
-concur_req = 5
 
 class MtimeComs(object):
     def __init__(self, query):
@@ -65,14 +61,18 @@ class MtimeComs(object):
                     page += 1
                     if hrefs:
                         to_do = [self.parse_link(url) for url in hrefs]
+                        # asyncio.as_completed，通过它可以获取一个协同程序的列表，
+                        # 同时返回一个按完成顺序生成协同程序的迭代器，因此当你用它迭代时，会尽快得到每个可用的结果
+                        # 返回一个协程迭代器。
                         to_od_iter = asyncio.as_completed(to_do)
                         for future in to_od_iter:
                             try:
                                 res = yield from future
                             except Exception as e:
-                                # print(e)
+                                print(e)
                                 continue
                     else:
+                        logger.info('no page!!!!!')
                         break
 
     @asyncio.coroutine
@@ -100,9 +100,8 @@ class MtimeComs(object):
             return counts
         except:
             logger.error('mtime crawl bug!!! %s' % traceback.format_exc())
-            # send_mail('mtime crawl bug', traceback.format_exc(), '1195615991@qq.com')
 
 if __name__ == '__main__':
     st = time.time()
-    res = MtimeComs('教父')
+    res = MtimeComs('我是传奇')
     print(time.time() - st)

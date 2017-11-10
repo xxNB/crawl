@@ -31,12 +31,12 @@ class BookId(object):
         types = map(lambda x: x.get_text().strip(), types)
         select = True
         for type in types:
-            if select:
-                if re.match(r'管理', type):
-                    select = False
-                    yield type
-            else:
-                yield type
+            # if select:
+            #     if re.match(r'管理', type):
+            #         select = False
+            #         yield type
+            # else:
+            yield type
 
     def process(self):
         count = 0

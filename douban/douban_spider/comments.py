@@ -6,15 +6,10 @@ from utils.log import logger
 import time
 import re
 import traceback
-from lxml import etree
-from urllib import parse
 import pymongo
 from pymongo import MongoClient as mc
 from utils.mail import send_mail
-from douban.douban_spider import identify
-client = mc('127.0.0.1', 27017)
-db = client['review']['douban']
-db.ensure_index([('href', pymongo.ASCENDING)], unique=True, dropDups=True)
+
 
 user_agent_list = [
         "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.1 (KHTML, like Gecko) Chrome/22.0.1207.1 Safari/537.1",
@@ -39,27 +34,24 @@ user_agent_list = [
 
 
 class Douban(object):
-    def __init__(self, query):
-        self.old_query = query
-        self.query = parse.quote(query)
-        self.s = requests.session()
-        acount = ['1195615991@qq.com', 'zx19950101']
-        self.formdata = {'redir': 'https://www.douban.com',
-                         'form_email': acount[0],
-                         'form_password': acount[1],
-                         'user_login': u'登陆'}
-        self.loginUrl = 'https://www.douban.com/accounts/login'
+    def __init__(self, ):
+        self.href = str()
+        self.title = str()
+        self.pub = str()
+        self.rating_nums = float()
+        self.pl = int()
+        try:
+            self.db_init()
+        except:
+            raise Exception('database error!!!')
         self.main()
 
+    def db_init(self):
+        client = mc('127.0.0.1', 27017)
+        self.db1 = client['review']['douban']
+        self.db1.ensure_index([('href', pymongo.ASCENDING)], unique=True, dropDups=True)
+        self.db2 = client['review']['all_book_id']
 
-    def get_id(self):
-        url = 'https://www.douban.com/search?q={}'.format(self.query)
-        web_text = self.s.get(url, headers=self.headers()).text
-        tree = etree.HTML(web_text)
-        ids = tree.xpath('//h3/a[@target="_blank"]/@onclick')[0]
-        pattern = re.compile(r'sid:\s(\d+)')
-        id = pattern.search(ids).group(1)
-        return id
 
     def headers(self):
         self.header = {
@@ -67,46 +59,10 @@ class Douban(object):
         }
         return self.header
 
-    def loginDB(self):
-        r = self.s.get(self.loginUrl,headers=self.headers())
-        my_page = r.text
-        re_captchaId= r'<input type="hidden" name="captcha-id" value="(.*?)".*?>'
-        captchaId=re.findall(re_captchaId, my_page)
-        if captchaId:
-            soup = bs(my_page, 'html.parser')
-            captchaSrc = soup.find('img', id='captcha_image')['src']
-            if captchaSrc:
-                print('captchaSrc ip is :'+ captchaSrc)
-                img = requests.get(captchaSrc)
-                with open('1.jpg', 'wb') as f:
-                    f.write(img.content)
-                # captcha = input('please input the captcha:')
-                id = identify.recognition('1.jpg')
-                print(id)
-                self.formdata['captcha-solution'] = id
-                self.formdata['captcha-id'] = captchaId
-            self.formdata["user_login"] = "登录"
-            r = self.s.post(self.loginUrl, data=self.formdata, headers = self.headers())
-            if r.url == "https://www.douban.com":
-                logger.info('Login successfully!!!')
-                return True
-            else:
-                logger.info('Login failed!')
-                return False
-        else:
-            r = self.s.post(self.loginUrl, data=self.formdata, headers=self.headers())
-            print(r.url)
-            if r.url == "https://www.douban.com":
-                logger.info('Login successfully!!!')
-                return True
-            else:
-                logger.info('Login failed!')
-                return False
-
 
     def get_all_pageurl(self):
-        url = 'https://movie.douban.com/subject/{}/reviews'.format(self.get_id())
-        total_data = self.s.get(url, headers=self.headers()).text
+        url = self.href + 'reviews'
+        total_data = requests.get(url, headers=self.headers()).text
         soup = bs(total_data, 'lxml')
         total_pages = soup.select('#content > div > div.article > div.paginator > a')[-1].get_text()
         all_page_url =  [url + '?start=%s' % (v * 20) for v in range(int(total_pages) + 1)]
@@ -114,28 +70,28 @@ class Douban(object):
 
     def get_all_links(self):
         for page_url in self.get_all_pageurl():
-            total_data = self.s.get(page_url, headers=self.headers()).text
+            total_data = requests.get(page_url, headers=self.headers()).text
             soup = bs(total_data, 'lxml')
             page_links_text = soup.find_all('a', {'class': 'title-link'})
             page_links = map(lambda x: x.get('href'), page_links_text)
-            for item_url in page_links:
-                yield item_url
+            yield from page_links
 
     def parse_comment(self):
-        try:
-            for ix, url in enumerate(self.get_all_links()):
-                try:
-                    self.worker(url)
-                except requests.exceptions.ConnectionError:
+        for ix, url in enumerate(self.get_all_links()):
+            try:
+                self.worker(url)
+            except Exception as e:
+                if isinstance(e, requests.exceptions.ConnectionError):
                     continue
+                else:
+                    logger.error('crawl Douban bug %s' % traceback.format_exc())
+                    send_mail('Douban crawl error', traceback.format_exc(), '1195615991@qq.com')
+            finally:
                 if ix % 20 == 0:
                     logger.info('has ben download %s' % ix)
-        except :
-            logger.error('crawl Douban bug %s' % traceback.format_exc())
-            send_mail('Douban crawl error', traceback.format_exc(), '1195615991@qq.com')
 
     def worker(self, url):
-        res = self.s.get(url, headers=self.headers())
+        res = requests.get(url, headers=self.headers())
         if res.status_code == 200:
             time.sleep(0.8)
             soup = bs(res.text, 'lxml')
@@ -146,26 +102,38 @@ class Douban(object):
             good = re.sub('\D', '', good)
             bad = soup.find_all('button')[1].get_text()
             bad = re.sub('\D', '', bad)
-            item = {'good': good, 'bad': bad, 'people': people, 'title': title, 'text': text.strip(), 'href': url, 'movie': self.old_query}
-            # print(item)
-            dbItem = db.find_one({'href': item['href']})
+            item = {'good': good, 'bad': bad, 'people': people, 'title': title, 'text': text.strip(),
+                    'href': url, 'book': self.title, 'pub': self.pub, 'pl': self.pl, 'rating_nums': self.rating_nums}
+            dbItem = self.db1.find_one({'href': item['href']})
             if dbItem:
                 pass
             else:
-                db.insert(item)
-                pass
+                self.db1.insert(item)
+
+    def gen_book(self, obj):
+        yield from obj
 
     def main(self):
-        #
-        # while 1:
-        #     time.sleep(5)
-        #     if self.loginDB():
-        #         break
-        logger.info('%s%s%s' %('start grab...\t', self.old_query, '影评信息'))
-        self.parse_comment()
+        book_item = self.db2.find({}, no_cursor_timeout=True)
+        for item in self.gen_book(book_item):
+            self.title = item['title']
+            self.href = item['href']
+            self.pub = item['pub']
+            self.rating_nums = item['rating_nums']
+            self.pl = re.sub("\D", "", item['pl'])
+            logger.info('%s%s%s' %('start grab...\t', self.title, '影评信息'))
+            while 1:
+                try:
+                    self.parse_comment()
+                except:
+                    print(traceback.format_exc())
+                    continue
+                else:
+                    logger.info('%s%s%s' %('self.title', '影评信息', 'done!!!'))
+                    self.db2.delete_one({'href': item['href']})
+                    break
+
 
 if __name__ == '__main__':
-
-    res = Douban('战狼2')
-    # res.loginDB()
+    res = Douban()
 

@@ -47,7 +47,7 @@ class SpiderMain(object):
 
     def tweet(self, words):
         # 进入scrapy目录执行
-        os.chdir("/Users/zhangxin/Desktop/crawl/TweetScraper/")
+        os.chdir("/Users/zhangxin/project/crawl/TweetScraper/")
         job(words)
 
     def main(self):
@@ -55,11 +55,11 @@ class SpiderMain(object):
             # excuter.submit(self.douban_run())
             # excuter.submit(self.maotuying_run())
             # excuter.submit(self.mafengwo_run())
-            excuter.submit(self.zhihu_run())
+            # excuter.submit(self.zhihu_run())
             # excuter.submit(self.mtime())
             pass
 
 if __name__ == '__main__':
     res = SpiderMain(doubanarg='霸王别姬', mafengwoarg='大理', maotuyingarg='大理', zhihuarg='美国往事', mtimearg=10968)
     # 执行twitter
-    res.tweet('scrapy crawl TweetScraper -a query=""tibet" since:2006-9-22 until:2013-12-13 " -a "crawl_user=True, lang=en"')
+    res.tweet('scrapy crawl TweetScraper -a query=""Trump" since:2006-9-22 until:2013-12-13 " -a "crawl_user=True, lang=French"')

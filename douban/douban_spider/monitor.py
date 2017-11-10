@@ -6,10 +6,10 @@ Created on 2017/10/28 下午2:43
 import time
 from pymongo import MongoClient as mc
 client = mc('127.0.0.1', 27017)
-db = client['travel']['maotu']
+db = client['review']['douban']
 
 
-count = db.find({}).count()
-while 1:
-    print(count)
-    time.sleep(3)
+count = len(db.distinct("book"))
+# while 1:
+print(count)
+

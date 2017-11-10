@@ -97,5 +97,6 @@ class MtimeComs(object):
 if __name__ == '__main__':
     import time
     st = time.time()
-    res = MtimeComs('教父')
+    res = MtimeComs('我是传奇')
+    print(db.find({}).count())
     print(time.time() - st)

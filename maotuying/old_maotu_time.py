@@ -7,6 +7,7 @@ from utils.mail import send_mail
 from utils.config import citys_name
 import redis
 import traceback
+import time
 from pymongo import MongoClient as mc
 
 client = mc('127.0.0.1', 27017)
@@ -100,7 +101,7 @@ class MaoTu(object):
                     'comment': comment.get_text().strip(),
                     'area': area
                 }
-                # print(data)
+                print(data)
                 db.insert(data)
             logger.info('has been download %s page' % ix)
 
@@ -117,9 +118,8 @@ class MaoTu(object):
 
 if __name__ == '__main__':
     # for dest in citys_name:
-    import time
     st = time.time()
-    res = MaoTu('大理')
+    res = MaoTu('西藏')
     print(time.time() - st)
     print(db.find({}).count())
         # send_mail('maotuying', '完成%s' % dest, '1195615991@qq.com')
